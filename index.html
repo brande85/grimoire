@@ -414,6 +414,96 @@ main{flex:1;padding:1.6rem 1.4rem 4rem;overflow-y:auto;}
 /* corner badge on book cards */
 .reaction-badge{position:absolute;bottom:32px;left:7px;z-index:3;width:38px;height:38px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.85);box-shadow:0 2px 8px rgba(0,0,0,0.6);background:var(--surface2);pointer-events:none;}
 .reaction-badge img{width:100%;height:100%;object-fit:contain;}
+
+/* ── Mobile: sidebar drawer ── */
+.mobile-filter-btn{display:none;}
+.sidebar-close{display:none;}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(2,1,10,0.7);z-index:90;backdrop-filter:blur(4px);}
+.sidebar-overlay.open{display:block;}
+
+@media(max-width:700px){
+  /* Hide sidebar by default, show as drawer */
+  .sidebar{
+    position:fixed;
+    top:0;
+    left:0;
+    height:100vh;
+    max-height:100vh;
+    width:260px;
+    z-index:100;
+    transform:translateX(-100%);
+    transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    padding-top:3.5rem;
+  }
+  .sidebar.open{transform:translateX(0);}
+
+  /* Close button inside sidebar on mobile */
+  .sidebar-close{
+    display:flex;
+    position:absolute;
+    top:0.75rem;
+    right:0.75rem;
+    background:rgba(155,109,255,0.09);
+    border:1px solid var(--border);
+    border-radius:50%;
+    width:28px;height:28px;
+    align-items:center;justify-content:center;
+    cursor:pointer;color:var(--muted);
+    font-size:0.9rem;
+  }
+
+  /* Show filter button in toolbar */
+  .mobile-filter-btn{
+    display:flex;
+    align-items:center;
+    gap:0.35rem;
+    background:var(--surface2);
+    border:1px solid var(--border);
+    border-radius:5px;
+    color:var(--muted);
+    font-family:'Outfit',sans-serif;
+    font-size:0.78rem;
+    padding:0.38rem 0.7rem;
+    cursor:pointer;
+    transition:all 0.13s;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .mobile-filter-btn:hover{color:var(--purple2);border-color:var(--purple-dim);}
+  .mobile-filter-btn.has-active{
+    background:rgba(155,109,255,0.16);
+    color:var(--purple2);
+    border-color:var(--purple-dim);
+  }
+
+  /* 3-column grid */
+  .grid{grid-template-columns:repeat(3,1fr);}
+
+  /* Tighter toolbar */
+  .browse-toolbar{padding:0.7rem 0.9rem 0.5rem;gap:0.5rem;}
+  .search-wrap{max-width:none;}
+
+  /* Full-screen detail panel */
+  .overlay{padding:0;}
+  .panel{
+    width:100% !important;
+    max-width:100% !important;
+    max-height:100vh !important;
+    border-radius:0 !important;
+    margin:0 !important;
+  }
+
+  /* Header: hide wordmark, shrink sticker */
+  .header-wordmark{display:none;}
+  .header-sticker{width:38px;height:38px;}
+  .logo{font-size:1.2rem;}
+  header{padding:0.4rem 1rem 0.4rem 0.6rem;gap:0.8rem;}
+
+  /* Nav tabs: smaller */
+  .nav-tab{padding:0.32rem 0.6rem;font-size:0.72rem;}
+  #count-display{display:none;}
+}
+
 </style>
 </head>
 <body>
@@ -433,7 +523,9 @@ main{flex:1;padding:1.6rem 1.4rem 4rem;overflow-y:auto;}
  
 <!-- ══ BROWSE PAGE ══ -->
 <div class="page active" id="browse-page" style="flex:1;">
-  <aside class="sidebar">
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
+  <aside class="sidebar" id="sidebar">
+    <button class="sidebar-close" onclick="closeMobileSidebar()" aria-label="Close filters">✕</button>
     <p class="sidebar-intro"><strong>What do you want to read?</strong><br>Pick any combination of filters.</p>
     <div class="filter-group" id="constellation-group">
       <div class="filter-group-label" onclick="toggleGroup('constellation-group')">Constellations ✦ <span class="filter-group-chevron">▼</span></div>
@@ -517,6 +609,7 @@ main{flex:1;padding:1.6rem 1.4rem 4rem;overflow-y:auto;}
   </aside>
   <main>
     <div class="browse-toolbar">
+      <button class="mobile-filter-btn" id="mobile-filter-btn" onclick="openMobileSidebar()">✦ Filters</button>
       <div class="search-wrap">
         <span class="search-icon">⌕</span>
         <input class="search-input" id="search-input" type="text" placeholder="Search titles, authors…" oninput="onSearch()" autocomplete="off">
@@ -951,6 +1044,7 @@ function getSortedIds(){
   return ids;
 }
 function applyFilters(){
+  updateMobileFilterBtn();
   const grid = document.getElementById('grid');
   const sortedIds = getSortedIds();
 
@@ -1002,20 +1096,12 @@ function makePh(book){
 }
 function makeCover(book, opts={}){
   if(book.coverUrl){
-    const parts = book.coverUrl.split('|').map(s => s.trim()).filter(Boolean);
     const wrap = document.createElement('div');
     wrap.className = 'cover-img-wrap';
     const img = document.createElement('img');
     img.alt = book.title;
-    img.src = parts[0];
-    let fallbackIndex = 1;
-    img.onerror = () => {
-      if(fallbackIndex < parts.length){
-        img.src = parts[fallbackIndex++];
-      } else {
-        wrap.replaceWith(makePh(book));
-      }
-    };
+    img.src = book.coverUrl;
+    img.onerror = () => { wrap.replaceWith(makePh(book)); };
     wrap.appendChild(img);
     return wrap;
   }
@@ -2157,6 +2243,25 @@ function makeExportBlock(label, code){
 
 function closeExport(){ document.getElementById('export-overlay').classList.remove('open'); }
 function maybeCloseExport(e){ if(e.target===document.getElementById('export-overlay')) closeExport(); }
+
+// ── Mobile sidebar ──
+function openMobileSidebar(){
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeMobileSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function updateMobileFilterBtn(){
+  const btn = document.getElementById('mobile-filter-btn');
+  if(!btn) return;
+  btn.classList.toggle('has-active', active.size > 0);
+  btn.textContent = active.size > 0 ? '✦ Filters (' + active.size + ')' : '✦ Filters';
+}
+
 </script>
 </body>
 </html>
